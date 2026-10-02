@@ -17,6 +17,10 @@ export type ModuleMeta = {
   statuses: string[]
   actions: string[]
   actionTargets: Record<string, string>
+  // 终态：进入后任何动作都不得再切换，保证不会先后落入两个终态。
+  terminalStatuses?: string[]
+  // 每个动作允许的来源状态：没登记的一律拒绝，状态只能按方向推进。
+  actionSources?: Record<string, string[]>
   metrics: string[]
 }
 

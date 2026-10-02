@@ -47,7 +47,7 @@
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
-              v-for="action in actions"
+              v-for="action in availableActions(row)"
               :key="action"
               class="link"
               type="button"
@@ -55,6 +55,7 @@
             >
               {{ action }}
             </button>
+            <span v-if="!availableActions(row).length" class="terminal-hint">已终结</span>
           </td>
         </tr>
         <tr v-if="!rows.length">
@@ -83,9 +84,14 @@ import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('drone')
 const columns = ["任务编号", "飞行区域", "飞行路线", "飞手姓名", "起飞时间", "降落时间", "发现异常数", "任务状态"]
-const actions = ["开始飞行", "确认完成", "中止任务"]
 const statuses = ["待执行", "飞行中", "已完成", "因故中止"]
 const stats = [{"label": "今日飞行任务", "value": 0}, {"label": "已完成任务", "value": 0}, {"label": "发现异常数", "value": 0}]
+
+// 状态机与 local-service 的流转规则一致：终态（已完成/因故中止）不再提供任何动作。
+const ACTIONS_BY_STATUS: Record<string, string[]> = {
+  待执行: ["开始飞行", "中止任务"],
+  飞行中: ["确认完成", "中止任务"],
+}
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -112,9 +118,21 @@ function openCreate() {
   errorMessage.value = '无人机巡查任务登记入口尚未接入审批流'
 }
 
+function availableActions(row: EntryRow): string[] {
+  return ACTIONS_BY_STATUS[String(row.status)] ?? []
+}
+
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
-  const result = applyAction(meta.key, Number(row.id), action)
+  let payload: Record<string, string | number> | undefined
+  if (action === '确认完成') {
+    const input = window.prompt('请填写本次飞行发现的异常数（无异常填 0）', '0')
+    if (input === null) {
+      return
+    }
+    payload = { 发现异常数: input.trim() }
+  }
+  const result = applyAction(meta.key, Number(row.id), action, payload)
   if (!result.ok) {
     errorMessage.value = result.message
     return
