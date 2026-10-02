@@ -47,7 +47,7 @@
           <td>{{ row.status }}</td>
           <td class="row-actions">
             <button
-              v-for="action in actions"
+              v-for="action in rowActions(row)"
               :key="action"
               class="link"
               type="button"
@@ -74,6 +74,7 @@
 import { computed, onMounted, ref } from 'vue'
 
 import {
+  availableActions,
   downloadEntries,
   listEntries,
   moduleMeta,
@@ -83,9 +84,17 @@ import type { EntryRow } from '@/data/types'
 
 const meta = moduleMeta('drone')
 const columns = ["任务编号", "飞行区域", "飞行路线", "飞手姓名", "起飞时间", "降落时间", "发现异常数", "任务状态"]
-const actions = ["开始飞行", "确认完成", "中止任务"]
 const statuses = ["待执行", "飞行中", "已完成", "因故中止"]
-const stats = [{"label": "今日飞行任务", "value": 0}, {"label": "已完成任务", "value": 0}, {"label": "发现异常数", "value": 0}]
+const todayText = (() => {
+  const time = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${time.getFullYear()}-${pad(time.getMonth() + 1)}-${pad(time.getDate())}`
+})()
+const stats = computed(() => [
+  { label: "今日飞行任务", value: rows.value.filter((row) => String(row['起飞时间'] ?? '').startsWith(todayText)).length },
+  { label: "已完成任务", value: rows.value.filter((row) => row.status === '已完成').length },
+  { label: "发现异常数", value: rows.value.reduce((sum, row) => sum + (Number(row['发现异常数']) || 0), 0) },
+])
 
 const rows = ref<EntryRow[]>([])
 const total = ref(0)
@@ -112,9 +121,21 @@ function openCreate() {
   errorMessage.value = '无人机巡查任务登记入口尚未接入审批流'
 }
 
+function rowActions(row: EntryRow): string[] {
+  return availableActions(meta.key, String(row.status))
+}
+
 function runAction(action: string, row: EntryRow) {
   errorMessage.value = ''
-  const result = applyAction(meta.key, Number(row.id), action)
+  const payload: Record<string, string> = {}
+  if (action === '确认完成') {
+    const anomalyCount = window.prompt('请输入本次巡查发现异常数（0 或正整数）', String(row['发现异常数'] ?? '0'))
+    if (anomalyCount === null) {
+      return
+    }
+    payload['发现异常数'] = anomalyCount.trim()
+  }
+  const result = applyAction(meta.key, Number(row.id), action, payload)
   if (!result.ok) {
     errorMessage.value = result.message
     return

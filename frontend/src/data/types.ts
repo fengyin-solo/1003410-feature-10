@@ -27,6 +27,8 @@ export type PageResult = {
   size: number
 }
 
+export type ActionPayload = Record<string, string>
+
 export type ActionResult = {
   ok: boolean
   message: string
